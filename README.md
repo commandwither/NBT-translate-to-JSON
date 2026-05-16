@@ -1,2 +1,2 @@
 # NBT-translate-to-JSON
-仅支持nbt转json
+现在支持NBT转JSON、写入NBT

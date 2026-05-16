@@ -3,97 +3,82 @@ import java.io.*;
 import java.lang.annotation.*;
 import java.nio.charset.*;
 import java.util.*;
+import org.json.*;
 
 public class NBTReader {
+	public static boolean lendian = false;
 	private DataInputStream inputStream;
-	private boolean lendian = true;
+	private TAG_Base allTag = null;
+	private final String TAGTYPE = " bs lf   ";
 	public NBTReader(FileInputStream file) {
 		inputStream = new DataInputStream(file);
 	}
 	public NBTReader(File file) throws FileNotFoundException {
 		inputStream = new DataInputStream(new FileInputStream(file));
 	};
-	public String readAsJSON() {
-		TAG_Base tag = readTag();
-		return readAsJSON(tag);
+	public JSONObject readAsJSON() throws Exception {
+		TAG_Base tag = readAllTag();
+		JSONObject result = (JSONObject)readAsJSON(tag);
+		return result;
 	};
-	private String readAsJSON(TAG_Base tag) {
+	private Object readAsJSON(TAG_Base tag) throws JSONException {
 		return readAsJSON(tag, false, true);
 	};
-	private String readAsJSON(TAG_Base tag, boolean isList, boolean isOutCompound) {
+	private Object readAsJSON(TAG_Base tag, boolean isList, boolean isOutCompound) throws JSONException {
 		if (tag == null) {
 			System.out.println("null");
-			return "null";
+			return null;
 		} ;
-		String connectStr = isList ? "" : ": ";
 		switch (tag.type) {
 			case TAG_End.type :
-				return "";
+				return null;
 			case TAG_Byte.type :
-				return tag.name + connectStr + tag.value.toString();
 			case TAG_Short.type :
-				return tag.name + connectStr + tag.value.toString();
 			case TAG_Int.type :
-				return tag.name + connectStr + tag.value.toString();
 			case TAG_Long.type :
-				return tag.name + connectStr + tag.value.toString();
 			case TAG_Float.type :
-				return tag.name + connectStr + tag.value.toString();
 			case TAG_Double.type :
-				return tag.name + connectStr + tag.value.toString();
-			case TAG_Byte_Array.type :
-				String byteStr = tag.name + ": [";
-				for (int index = 0; index < ((TAG_Byte_Array) tag).value.length; index++) {
-					if (index == 0) {
-						byteStr += ((TAG_Byte_Array) tag).value[index];
-					} else {
-						byteStr += ", " + ((TAG_Byte_Array) tag).value[index];
-					}
-
-				}
-				return byteStr + "]";
 			case TAG_String.type :
-				return tag.name + ": \"" + ((TAG_String) tag).value.replace("\"", "\\\"") + "\"";
+				char type = TAGTYPE.charAt(tag.type);
+				if(type == ' '){
+					return tag.value;
+				} else {
+					return tag.value + String.valueOf(type);
+				}
+			case TAG_Byte_Array.type :
+				JSONArray byteArray = new JSONArray((((TAG_Byte_Array)tag).value));
+				
+				return (JSONObject)((Object)byteArray);
 			case TAG_List.type : {
 				TAG_List list = (TAG_List) tag;
-				String snbt = list.name + ": [";
+				JSONArray jsonList = new JSONArray();
 				for (int index = 0; index < list.value.size(); index++) {
-					snbt += readAsJSON(list.value.get(index), true, false);
-					if (index != list.value.size()) {
-						snbt += ",";
-					}
+					jsonList.put(readAsJSON(list.value.get(index), true, false));
 				}
-				return snbt + "]";
+				return jsonList;
 			}
 			case TAG_Compound.type : {
 				TAG_Compound tagCompound = (TAG_Compound) tag;
-				String snbt = tag.name + (isOutCompound ? "{" : ": {");
-				boolean isFirst = true;
+				JSONObject json = new JSONObject();
 				for (int index = 0; index < tagCompound.value.size(); index++) {
-					if (tagCompound.value.get(index).type == TAG_End.type) {
-						break;
-					}
-					snbt += (isFirst ? "" : ", ") + readAsJSON(tagCompound.value.get(index), false, false);
-					isFirst = false;
+					json.put(tagCompound.value.get(index).name, readAsJSON(tagCompound.value.get(index), false, false));
 				} ;
-				return snbt + "}";
+				return json;
 			}
 			case TAG_Int_Array.type : {
-				TAG_Int_Array tagIntArray = (TAG_Int_Array) tag;
-				String snbt = "{" + tagIntArray.name + ": [";
-				for (int index = 0; index < tagIntArray.value.length; index++) {
-					if (index == 0) {
-						snbt += tagIntArray.value[index];
-					} else {
-						snbt += ", " + tagIntArray.value[index];
-					}
-				}
-				return snbt + "]";
+				JSONArray intArray = new JSONArray((((TAG_Int_Array)tag).value));
+				return intArray;
 			}
 		}
 		return null;
 	};
-
+	public TAG_Base readAllTag(){
+		if(allTag != null){
+			return allTag;
+		};
+		allTag = readTag();
+		return allTag;
+	};
 	private TAG_Base readTag() {
 		try {
 			byte tagType = inputStream.readByte();
@@ -150,7 +135,7 @@ public class NBTReader {
 					while ((tagCurrent = readTag()).type != TAG_End.type) {
 						tags.add(tagCurrent);
 					}
-					tags.add(new TAG_End());
+					//tags.add(new TAG_End());
 					return new TAG_Compound(name, tags);
 				case TAG_Int_Array.type :
 					int length = (lendian ? Integer.reverseBytes(inputStream.readInt()) : inputStream.readInt());
